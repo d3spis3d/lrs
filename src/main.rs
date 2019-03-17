@@ -32,7 +32,8 @@ struct SegmentedContents {
     symlinks: Vec<OsString>,
 }
 
-fn segment(contents: Vec<DirEntry>) -> Result<SegmentedContents, Error> {
+fn segment(contents: Result<Vec<DirEntry>, Error>) -> Result<SegmentedContents, Error> {
+    let contents = contents?;
     let segments = contents
         .into_iter()
         .fold(
@@ -54,6 +55,15 @@ fn segment(contents: Vec<DirEntry>) -> Result<SegmentedContents, Error> {
     Ok(segments)
 }
 
+fn sort_segments(segments: Result<SegmentedContents, Error>) -> Result<SegmentedContents, Error> {
+    let mut segments = segments?;
+    segments.files.sort_unstable();
+    segments.dirs.sort_unstable();
+    segments.symlinks.sort_unstable();
+
+    Ok(segments)
+}
+
 fn print_all(contents: Vec<OsString>) {
     for c in contents {
         print!("{} ", c.to_str().unwrap())
@@ -72,16 +82,9 @@ fn print(contents: Vec<OsString>) {
 fn main() {
     let opts = Opt::from_args();
     let contents = read_dirs(opts.path.as_path());
-    let contents = match contents {
-        Ok(c) => c,
-        Err(e) => {
-            println!("{}", e);
-            return ();
-        }
-    };
-
     let segmented_contents = segment(contents);
-    let segmented_contents = match segmented_contents {
+    let sorted_contents = sort_segments(segmented_contents);
+    let sorted_contents = match sorted_contents {
         Ok(c) => c,
         Err(e) => {
             println!("{}", e);
@@ -90,14 +93,14 @@ fn main() {
     };
 
     if opts.all {
-        print_all(segmented_contents.files);
-        print_all(segmented_contents.symlinks);
-        print_all(segmented_contents.dirs);
+        print_all(sorted_contents.files);
+        print_all(sorted_contents.symlinks);
+        print_all(sorted_contents.dirs);
         println!()
     } else {
-        print(segmented_contents.files);
-        print(segmented_contents.symlinks);
-        print(segmented_contents.dirs);
+        print(sorted_contents.files);
+        print(sorted_contents.symlinks);
+        print(sorted_contents.dirs);
         println!()
     }
 }
