@@ -1,6 +1,6 @@
 extern crate structopt;
 
-use std::fs;
+use std::fs::{self,DirEntry};
 use std::ffi::OsString;
 use std::path::{Path,PathBuf};
 use std::io::Error;
@@ -17,18 +17,46 @@ struct Opt {
     path: PathBuf,
 }
 
-fn read_dirs(p: &Path) -> Result<Vec<OsString>, Error> {
+fn read_dirs(p: &Path) -> Result<Vec<DirEntry>, Error> {
     let mut dir_contents = Vec::new();
     for entry in fs::read_dir(p)? {
         let e = entry?;
-        dir_contents.push(e.file_name());
+        dir_contents.push(e);
     }
     Ok(dir_contents)
 }
 
+struct SegmentedContents {
+    files: Vec<OsString>,
+    dirs: Vec<OsString>,
+    symlinks: Vec<OsString>,
+}
+
+fn segment(contents: Vec<DirEntry>) -> Result<SegmentedContents, Error> {
+    let segments = contents
+        .into_iter()
+        .fold(
+            SegmentedContents { files: vec![], dirs: vec![], symlinks: vec![] },
+            |mut acc, x| {
+                let name = x.file_name();
+                let file_type = x.file_type().unwrap();
+                if file_type.is_dir() {
+                    acc.dirs.push(name);
+                } else if file_type.is_file() {
+                    acc.files.push(name);
+                } else {
+                    acc.symlinks.push(name);
+                }
+
+                acc
+            }
+        );
+    Ok(segments)
+}
+
 fn print_all(contents: Vec<OsString>) {
     for c in contents {
-        println!("{}", c.to_str().unwrap())
+        print!("{} ", c.to_str().unwrap())
     }
 }
 
@@ -36,7 +64,7 @@ fn print(contents: Vec<OsString>) {
     for c in contents {
         let c_string = c.to_str().unwrap();
         if c_string.chars().nth(0) != ".".chars().nth(0) {
-            println!("{}", c_string)
+            print!("{} ", c_string)
         }
     }
 }
@@ -44,7 +72,6 @@ fn print(contents: Vec<OsString>) {
 fn main() {
     let opts = Opt::from_args();
     let contents = read_dirs(opts.path.as_path());
-
     let contents = match contents {
         Ok(c) => c,
         Err(e) => {
@@ -53,9 +80,24 @@ fn main() {
         }
     };
 
+    let segmented_contents = segment(contents);
+    let segmented_contents = match segmented_contents {
+        Ok(c) => c,
+        Err(e) => {
+            println!("{}", e);
+            return ();
+        }
+    };
+
     if opts.all {
-        print_all(contents);
+        print_all(segmented_contents.files);
+        print_all(segmented_contents.symlinks);
+        print_all(segmented_contents.dirs);
+        println!()
     } else {
-        print(contents);
+        print(segmented_contents.files);
+        print(segmented_contents.symlinks);
+        print(segmented_contents.dirs);
+        println!()
     }
 }
