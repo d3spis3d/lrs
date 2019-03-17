@@ -1,10 +1,10 @@
 extern crate structopt;
 
-use std::ffi::OsString;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 mod read;
+mod printer;
 
 #[derive(StructOpt)]
 #[structopt(name = "lsr", about = "Rust implementation of UNIX ls command.")]
@@ -15,21 +15,6 @@ struct Opt {
     // The directory to list the contents of
     #[structopt(parse(from_os_str), default_value = ".")]
     path: PathBuf,
-}
-
-fn print_all(contents: Vec<OsString>) {
-    for c in contents {
-        print!("{} ", c.to_str().unwrap())
-    }
-}
-
-fn print(contents: Vec<OsString>) {
-    for c in contents {
-        let c_string = c.to_str().unwrap();
-        if c_string.chars().nth(0) != ".".chars().nth(0) {
-            print!("{} ", c_string)
-        }
-    }
 }
 
 fn main() {
@@ -43,15 +28,5 @@ fn main() {
         }
     };
 
-    if opts.all {
-        print_all(contents.files);
-        print_all(contents.symlinks);
-        print_all(contents.dirs);
-        println!()
-    } else {
-        print(contents.files);
-        print(contents.symlinks);
-        print(contents.dirs);
-        println!()
-    }
+    printer::print_contents(contents, opts.all);
 }
